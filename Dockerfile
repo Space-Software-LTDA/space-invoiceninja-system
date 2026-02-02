@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
     libicu-dev \
+    libcurl4-openssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar extensões PHP necessárias
@@ -30,13 +32,16 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     pdo_mysql \
     mysqli \
     bcmath \
-    curl \
     gd \
     mbstring \
     xml \
     zip \
     intl \
     opcache
+
+# A extensão curl geralmente já vem habilitada na imagem base do PHP
+# Se necessário, descomente a linha abaixo:
+# RUN docker-php-ext-install curl
 
 # Instalar Redis extension (opcional mas recomendado)
 RUN pecl install redis && docker-php-ext-enable redis
