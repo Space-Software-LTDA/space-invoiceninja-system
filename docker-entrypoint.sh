@@ -13,7 +13,7 @@ php artisan config:clear 2>/dev/null || true
 php artisan cache:clear 2>/dev/null || true
 php artisan view:clear 2>/dev/null || true
 php artisan route:clear 2>/dev/null || true
-php artisan serve 2>/dev/null || true
+# php artisan serve 2>/dev/null || true
 
 # Otimizar aplicação Laravel (opcional, pode ser feito manualmente)
 # php artisan config:cache || true
