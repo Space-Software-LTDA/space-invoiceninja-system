@@ -23,6 +23,7 @@ use App\Http\Middleware\VerifyHash;
 use App\Http\Middleware\SetInviteDb;
 use App\Http\Middleware\TrimStrings;
 use App\Http\Middleware\Authenticate;
+use App\Http\Middleware\OneTimeFixStopOnUnpaidRecurring;
 use App\Http\Middleware\ContactSetDb;
 use App\Http\Middleware\QueryLogging;
 use App\Http\Middleware\TrustProxies;
@@ -84,6 +85,7 @@ class Kernel extends HttpKernel
      */
     protected $middlewareGroups = [
         'web' => [
+            OneTimeFixStopOnUnpaidRecurring::class,
             SessionDomains::class,
             EncryptCookies::class,
             AddQueuedCookiesToResponse::class,
