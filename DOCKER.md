@@ -2,11 +2,18 @@
 
 Este Dockerfile foi criado especificamente para uso com **EasyPanel** e **NGINX separado**.
 
+## ⚠️ IMPORTANTE - Leia Primeiro!
+
+**Este Dockerfile baixa o release oficial do InvoiceNinja do GitHub**, que já vem com o frontend React compilado. 
+
+**NÃO use o código-fonte diretamente** - o InvoiceNinja não espera que você faça `npm run build` em produção. Eles distribuem releases prontos para uso.
+
 ## Características
 
 - ✅ PHP 8.2-FPM
 - ✅ Todas as extensões PHP necessárias instaladas
 - ✅ Composer pré-instalado
+- ✅ **Baixa release oficial do GitHub** (com frontend React já compilado)
 - ✅ Otimizado para produção
 - ✅ OPcache habilitado
 - ✅ Configurado para trabalhar com NGINX separado
@@ -26,7 +33,14 @@ No EasyPanel, configure o build do Dockerfile:
 ```bash
 # O EasyPanel fará o build automaticamente, mas você pode testar localmente:
 docker build -t invoiceninja-custom:latest .
+
+# Para usar uma versão específica (ao invés de "latest"):
+docker build --build-arg INVOICENINJA_VERSION=v5.7.0 -t invoiceninja-custom:v5.7.0 .
 ```
+
+**⚠️ Importante**: Este Dockerfile **NÃO usa o código-fonte do seu repositório Git**. Ele baixa automaticamente o release oficial do GitHub que já vem com o frontend React compilado.
+
+Se você precisa usar o código-fonte do seu próprio repositório, veja a seção "Usando Código-Fonte Próprio" abaixo.
 
 ### 2. Configuração no EasyPanel
 
@@ -73,16 +87,46 @@ php artisan key:generate --show
 
 ### 4. Configuração do NGINX no EasyPanel
 
-O NGINX já está rodando separadamente. Certifique-se de que a configuração do NGINX está apontando para o PHP-FPM na porta **9000**:
+O NGINX já está rodando separadamente. **IMPORTANTE**: Certifique-se de que a configuração do NGINX está correta:
+
+**Document Root**: O NGINX deve apontar para `/var/www/html/public` (não apenas `/var/www/html`)
+
+**Configuração NGINX recomendada**:
 
 ```nginx
-location ~ \.php$ {
-    fastcgi_pass invoiceninja-app:9000;  # Nome do seu container
-    fastcgi_index index.php;
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    include fastcgi_params;
+server {
+    listen 80;
+    server_name seu-dominio.com;
+    
+    # Document root DEVE ser /var/www/html/public
+    root /var/www/html/public;
+    index index.php index.html;
+
+    # Configuração do PHP-FPM
+    location ~ \.php$ {
+        fastcgi_pass invoiceninja-app:9000;  # Nome do seu container PHP-FPM
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+
+    # Redirecionar tudo para index.php (Laravel)
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # Negar acesso a arquivos ocultos
+    location ~ /\. {
+        deny all;
+    }
 }
 ```
+
+**No EasyPanel**, configure:
+- **Document Root**: `/var/www/html/public`
+- **PHP-FPM Host**: Nome do seu container (ex: `invoiceninja-app`)
+- **PHP-FPM Port**: `9000`
 
 ### 5. Volumes Necessários
 
@@ -161,16 +205,54 @@ php artisan route:clear
 
 1. **Não inclui NGINX**: Este Dockerfile é apenas para PHP-FPM, pois o NGINX já está rodando separadamente no EasyPanel.
 
-2. **Produção**: O Dockerfile está configurado para produção (`--no-dev` no composer install).
+2. **Document Root**: ⚠️ **CRÍTICO** - O NGINX deve apontar para `/var/www/html/public` como document root, não para `/var/www/html`. O arquivo `index.php` está em `public/index.php`.
 
-3. **OPcache**: Está habilitado e otimizado para melhor performance.
+3. **Produção**: O Dockerfile está configurado para produção (`--no-dev` no composer install).
 
-4. **Porta**: O PHP-FPM está configurado para escutar na porta **9000** (padrão).
+4. **OPcache**: Está habilitado e otimizado para melhor performance.
 
-5. **Storage**: O diretório `storage` precisa ter permissões de escrita.
+5. **Porta**: O PHP-FPM está configurado para escutar na porta **9000** (padrão).
+
+6. **Storage**: O diretório `storage` precisa ter permissões de escrita.
+
+7. **Estrutura de Diretórios no Container**:
+   ```
+   /var/www/html/              # Raiz do projeto Laravel
+   ├── app/
+   ├── bootstrap/
+   ├── config/
+   ├── public/                 # ⬅️ Document Root do NGINX deve apontar aqui
+   │   └── index.php          # ⬅️ Arquivo de entrada principal
+   ├── resources/
+   ├── routes/
+   ├── storage/
+   └── vendor/
+   ```
+
+## Usando Código-Fonte Próprio (Avançado)
+
+Se você realmente precisa usar o código-fonte do seu próprio repositório Git ao invés do release oficial:
+
+1. **Problema**: O código-fonte não vem com o frontend React compilado
+2. **Solução**: Você precisa fazer o build do frontend React manualmente
+
+**Opções**:
+
+### Opção A: Usar Dockerfile.from-source (Requer acesso ao repo UI)
+- Use o arquivo `Dockerfile.from-source` 
+- Requer acesso ao repositório `invoiceninja/ui` (privado)
+- Faz build completo do frontend React durante o build da imagem
+
+### Opção B: Build Manual do Frontend
+1. Faça o build do frontend React localmente ou em CI/CD
+2. Commit os arquivos compilados no repositório
+3. Use o Dockerfile normal
+
+**⚠️ Recomendação**: Use sempre o release oficial quando possível. É mais confiável e testado.
 
 ## Suporte
 
 Para mais informações sobre o InvoiceNinja:
 - [Documentação Oficial](https://invoiceninja.github.io/)
 - [Fórum de Suporte](https://forum.invoiceninja.com)
+- [Releases no GitHub](https://github.com/invoiceninja/invoiceninja/releases)

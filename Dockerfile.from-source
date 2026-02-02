@@ -1,6 +1,8 @@
-# Dockerfile para InvoiceNinja com PHP-FPM
-# Otimizado para uso com NGINX separado (EasyPanel)
-# Usa o release oficial do GitHub (com frontend React já compilado)
+# Dockerfile ALTERNATIVO - Para usar código fonte do repositório Git
+# ATENÇÃO: Este Dockerfile requer acesso ao repositório UI do InvoiceNinja
+# e faz build completo do frontend React. Use apenas se você tem acesso ao repo UI.
+# 
+# Para produção, use o Dockerfile principal que baixa o release oficial.
 
 FROM php:8.2-fpm
 
@@ -8,14 +10,12 @@ FROM php:8.2-fpm
 ENV DEBIAN_FRONTEND=noninteractive \
     PHP_MEMORY_LIMIT=512M \
     PHP_UPLOAD_MAX_FILESIZE=50M \
-    PHP_POST_MAX_SIZE=50M \
-    INVOICENINJA_VERSION=latest
+    PHP_POST_MAX_SIZE=50M
 
-# Instalar dependências do sistema
+# Instalar dependências do sistema (incluindo Node.js para build do frontend)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    wget \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libcurl4-openssl-dev \
     pkg-config \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar extensões PHP necessárias
@@ -42,11 +44,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     intl \
     opcache
 
-# A extensão curl geralmente já vem habilitada na imagem base do PHP
-# Se necessário, descomente a linha abaixo:
-# RUN docker-php-ext-install curl
-
-# Instalar Redis extension (opcional mas recomendado)
+# Instalar Redis extension
 RUN pecl install redis && docker-php-ext-enable redis
 
 # Instalar Composer
@@ -55,20 +53,33 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Configurar diretório de trabalho
 WORKDIR /var/www/html
 
-# Baixar e extrair o release oficial do InvoiceNinja
-# O release já vem com o frontend React compilado
-RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
-        RELEASE_URL=$(curl -s https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest | grep "browser_download_url.*\.tar\.gz" | cut -d '"' -f 4); \
-    else \
-        RELEASE_URL="https://github.com/invoiceninja/invoiceninja/releases/download/${INVOICENINJA_VERSION}/invoiceninja.tar.gz"; \
-    fi && \
-    echo "Baixando release de: $RELEASE_URL" && \
-    wget -q "$RELEASE_URL" -O invoiceninja.tar.gz && \
-    tar -xzf invoiceninja.tar.gz --strip-components=1 && \
-    rm invoiceninja.tar.gz
+# Copiar apenas arquivos necessários para instalar dependências (melhor cache)
+COPY composer.json composer.lock* ./
+COPY package.json ./
 
 # Instalar dependências do Composer (sem dev para produção)
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
+
+# Copiar o resto dos arquivos do projeto
+COPY . .
+
+# ATENÇÃO: Para fazer build do frontend React, você precisa:
+# 1. Ter acesso ao repositório UI (invoiceninja/ui)
+# 2. Configurar as variáveis de ambiente necessárias
+# 3. Clonar e fazer build do UI
+#
+# Descomente e ajuste as linhas abaixo se você tem acesso:
+#
+# RUN git clone https://SEU_TOKEN@github.com/invoiceninja/ui.git /tmp/ui && \
+#     cd /tmp/ui && \
+#     npm install && \
+#     npm run build && \
+#     cp -r dist/* /var/www/html/public/ && \
+#     mv /var/www/html/public/index.html /var/www/html/resources/views/react/index.blade.php && \
+#     rm -rf /tmp/ui
+
+# Build dos assets JS/CSS do Laravel
+RUN npm install && npm run production && rm -rf node_modules
 
 # Executar scripts pós-instalação do Composer
 RUN composer dump-autoload --optimize
@@ -100,7 +111,7 @@ RUN echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=2" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/opcache.ini
 
-# Script de inicialização (copiar antes para melhor cache)
+# Script de inicialização
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
