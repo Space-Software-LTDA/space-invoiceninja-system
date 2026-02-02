@@ -1409,6 +1409,7 @@ Quando tiver as quantias, volte a esta página de formas de pagamento e clique "
     'payment_type_Switch' => 'Switch',
     'payment_type_iZettle' => 'iZettle',
     'payment_type_Swish' => 'Swish',
+    'payment_type_PIX' => 'PIX',
     'payment_type_Alipay' => 'Alipay',
     'payment_type_Sofort' => 'Sofort',
     'payment_type_SEPA' => 'Débito Direto SEPA',
