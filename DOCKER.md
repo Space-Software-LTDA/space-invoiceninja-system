@@ -2,18 +2,11 @@
 
 Este Dockerfile foi criado especificamente para uso com **EasyPanel** e **NGINX separado**.
 
-## ⚠️ IMPORTANTE - Leia Primeiro!
-
-**Este Dockerfile baixa o release oficial do InvoiceNinja do GitHub**, que já vem com o frontend React compilado. 
-
-**NÃO use o código-fonte diretamente** - o InvoiceNinja não espera que você faça `npm run build` em produção. Eles distribuem releases prontos para uso.
-
 ## Características
 
 - ✅ PHP 8.2-FPM
 - ✅ Todas as extensões PHP necessárias instaladas
 - ✅ Composer pré-instalado
-- ✅ **Baixa release oficial do GitHub** (com frontend React já compilado)
 - ✅ Otimizado para produção
 - ✅ OPcache habilitado
 - ✅ Configurado para trabalhar com NGINX separado
@@ -33,14 +26,7 @@ No EasyPanel, configure o build do Dockerfile:
 ```bash
 # O EasyPanel fará o build automaticamente, mas você pode testar localmente:
 docker build -t invoiceninja-custom:latest .
-
-# Para usar uma versão específica (ao invés de "latest"):
-docker build --build-arg INVOICENINJA_VERSION=v5.7.0 -t invoiceninja-custom:v5.7.0 .
 ```
-
-**⚠️ Importante**: Este Dockerfile **NÃO usa o código-fonte do seu repositório Git**. Ele baixa automaticamente o release oficial do GitHub que já vem com o frontend React compilado.
-
-Se você precisa usar o código-fonte do seu próprio repositório, veja a seção "Usando Código-Fonte Próprio" abaixo.
 
 ### 2. Configuração no EasyPanel
 
@@ -229,30 +215,8 @@ php artisan route:clear
    └── vendor/
    ```
 
-## Usando Código-Fonte Próprio (Avançado)
-
-Se você realmente precisa usar o código-fonte do seu próprio repositório Git ao invés do release oficial:
-
-1. **Problema**: O código-fonte não vem com o frontend React compilado
-2. **Solução**: Você precisa fazer o build do frontend React manualmente
-
-**Opções**:
-
-### Opção A: Usar Dockerfile.from-source (Requer acesso ao repo UI)
-- Use o arquivo `Dockerfile.from-source` 
-- Requer acesso ao repositório `invoiceninja/ui` (privado)
-- Faz build completo do frontend React durante o build da imagem
-
-### Opção B: Build Manual do Frontend
-1. Faça o build do frontend React localmente ou em CI/CD
-2. Commit os arquivos compilados no repositório
-3. Use o Dockerfile normal
-
-**⚠️ Recomendação**: Use sempre o release oficial quando possível. É mais confiável e testado.
-
 ## Suporte
 
 Para mais informações sobre o InvoiceNinja:
 - [Documentação Oficial](https://invoiceninja.github.io/)
 - [Fórum de Suporte](https://forum.invoiceninja.com)
-- [Releases no GitHub](https://github.com/invoiceninja/invoiceninja/releases)

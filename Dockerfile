@@ -1,6 +1,5 @@
 # Dockerfile para InvoiceNinja com PHP-FPM
 # Otimizado para uso com NGINX separado (EasyPanel)
-# Usa o release oficial do GitHub (com frontend React já compilado)
 
 FROM php:8.2-fpm
 
@@ -8,14 +7,12 @@ FROM php:8.2-fpm
 ENV DEBIAN_FRONTEND=noninteractive \
     PHP_MEMORY_LIMIT=512M \
     PHP_UPLOAD_MAX_FILESIZE=50M \
-    PHP_POST_MAX_SIZE=50M \
-    INVOICENINJA_VERSION=latest
+    PHP_POST_MAX_SIZE=50M
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    wget \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
@@ -55,28 +52,22 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Configurar diretório de trabalho
 WORKDIR /var/www/html
 
-# Baixar e extrair o release oficial do InvoiceNinja
-# O release já vem com o frontend React compilado
-RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
-        RELEASE_URL=$(curl -s https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest | grep "browser_download_url.*\.tar\.gz" | cut -d '"' -f 4); \
-    else \
-        RELEASE_URL="https://github.com/invoiceninja/invoiceninja/releases/download/${INVOICENINJA_VERSION}/invoiceninja.tar.gz"; \
-    fi && \
-    echo "Baixando release de: $RELEASE_URL" && \
-    wget -q "$RELEASE_URL" -O invoiceninja.tar.gz && \
-    tar -xzf invoiceninja.tar.gz --strip-components=1 && \
-    rm invoiceninja.tar.gz
+# Copiar apenas arquivos necessários para instalar dependências (melhor cache)
+COPY composer.json composer.lock* ./
 
 # Instalar dependências do Composer (sem dev para produção)
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
 
-# Executar scripts pós-instalação do Composer
-RUN composer dump-autoload --optimize
+# Copiar o resto dos arquivos do projeto
+COPY . .
 
 # Configurar permissões
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
+
+# Executar scripts pós-instalação do Composer
+RUN composer dump-autoload --optimize
 
 # Configurar PHP-FPM
 RUN sed -i 's/listen = 127.0.0.1:9000/listen = 9000/' /usr/local/etc/php-fpm.d/www.conf \
