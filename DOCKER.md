@@ -2,6 +2,17 @@
 
 Este Dockerfile foi criado especificamente para uso com **EasyPanel** e **NGINX separado**.
 
+## ⚠️ IMPORTANTE: Release vs Código Fonte
+
+**O Dockerfile padrão (`Dockerfile`) baixa o release oficial do GitHub**, que já vem com:
+- ✅ Frontend React compilado
+- ✅ Assets JS/CSS buildados
+- ✅ Tudo pronto para produção
+
+**NÃO use o código fonte do Git diretamente** - ele não tem o frontend React compilado e você verá a mensagem de fallback.
+
+Se você precisa fazer customizações no código, use `Dockerfile.from-source` (mais complexo e requer build do React).
+
 ## Características
 
 - ✅ PHP 8.2-FPM
@@ -26,15 +37,27 @@ No EasyPanel, configure o build do Dockerfile:
 ```bash
 # O EasyPanel fará o build automaticamente, mas você pode testar localmente:
 docker build -t invoiceninja-custom:latest .
+
+# O Dockerfile baixa automaticamente o release oficial do GitHub
+# Você pode especificar uma versão específica usando build arg:
+docker build --build-arg INVOICENINJA_VERSION=v5.7.0 -t invoiceninja-custom:latest .
 ```
+
+**Nota**: O Dockerfile padrão baixa o release oficial. Se você quiser usar o código fonte do repositório Git, precisará usar `Dockerfile.from-source` e fazer o build completo do React (não recomendado para produção).
 
 ### 2. Configuração no EasyPanel
 
 1. **Criar novo aplicativo** no EasyPanel
 2. **Selecionar "Docker"** como tipo de aplicativo
-3. **Configurar o repositório Git** (seu repositório)
+3. **Configurar o repositório Git** (este repositório com o Dockerfile)
+   - ⚠️ **Importante**: Você só precisa do Dockerfile neste repositório
+   - O Dockerfile baixa automaticamente o release oficial do GitHub
+   - Não precisa fazer checkout do código fonte completo
 4. **Definir o Dockerfile** como caminho de build
 5. **Configurar variáveis de ambiente** (veja abaixo)
+6. **Build Args (opcional)**: Se quiser uma versão específica:
+   - `INVOICENINJA_VERSION=v5.7.0` (substitua pela versão desejada)
+   - Por padrão usa `latest`
 
 ### 3. Variáveis de Ambiente Necessárias
 
@@ -156,11 +179,28 @@ php artisan view:cache
 
 ```
 .
-├── Dockerfile              # Dockerfile principal
+├── Dockerfile              # Dockerfile principal (usa release oficial)
+├── Dockerfile.from-source  # Dockerfile alternativo (compila código fonte)
 ├── docker-entrypoint.sh    # Script de inicialização
 ├── .dockerignore          # Arquivos ignorados no build
 └── DOCKER.md              # Este arquivo
 ```
+
+## Diferença entre os Dockerfiles
+
+### `Dockerfile` (Recomendado)
+- ✅ Baixa o release oficial do GitHub
+- ✅ Já vem com frontend React compilado
+- ✅ Pronto para produção
+- ✅ Build mais rápido
+- ✅ Menor chance de erros
+
+### `Dockerfile.from-source` (Avançado)
+- ⚠️ Compila o código fonte completo
+- ⚠️ Requer acesso ao repositório UI do InvoiceNinja
+- ⚠️ Requer Node.js e build do React
+- ⚠️ Build mais lento
+- ⚠️ Use apenas se precisar fazer customizações no código
 
 ## Troubleshooting
 

@@ -12,6 +12,13 @@ docker-compose.yml
 node_modules
 vendor
 
+# Arquivos compilados (não devem estar no Git, mas por segurança)
+public/react
+public/build
+public/build-admin
+*.js.map
+*.css.map
+
 # Arquivos de ambiente
 .env
 .env.*

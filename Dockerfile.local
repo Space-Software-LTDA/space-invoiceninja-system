@@ -1,6 +1,6 @@
 # Dockerfile para InvoiceNinja com PHP-FPM
-# Otimizado para uso com NGINX separado (EasyPanel)
-# Usa o release oficial do GitHub com frontend React já compilado
+# Versão que usa código fonte LOCAL e faz build durante o Docker build
+# Use este se você quer fazer customizações no código
 
 FROM php:8.2-fpm
 
@@ -9,13 +9,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PHP_MEMORY_LIMIT=512M \
     PHP_UPLOAD_MAX_FILESIZE=50M \
     PHP_POST_MAX_SIZE=50M \
-    INVOICENINJA_VERSION=latest
+    NODE_VERSION=22
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    wget \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
@@ -28,6 +27,10 @@ RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# Instalar Node.js (necessário para build do React)
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
+    && apt-get install -y nodejs
 
 # Instalar extensões PHP necessárias
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
@@ -42,7 +45,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     intl \
     opcache
 
-# Instalar Redis extension (opcional mas recomendado)
+# Instalar Redis extension
 RUN pecl install redis && docker-php-ext-enable redis
 
 # Instalar Composer
@@ -51,23 +54,50 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Configurar diretório de trabalho
 WORKDIR /var/www/html
 
-# Baixar e extrair o release oficial do InvoiceNinja
-RUN wget -q https://github.com/invoiceninja/invoiceninja/releases/download/${INVOICENINJA_VERSION}/invoiceninja.tar.gz -O /tmp/invoiceninja.tar.gz \
-    && mkdir -p /tmp/invoiceninja-extract \
-    && tar -xzf /tmp/invoiceninja.tar.gz -C /tmp/invoiceninja-extract \
-    && rm /tmp/invoiceninja.tar.gz \
-    && cd /tmp/invoiceninja-extract \
-    && if [ -d invoiceninja ]; then \
-        cp -R invoiceninja/* /var/www/html/; \
-    else \
-        EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "invoiceninja*" | head -1); \
-        if [ -n "$EXTRACT_DIR" ]; then \
-            cp -R "$EXTRACT_DIR"/* /var/www/html/; \
-        else \
-            cp -R . /var/www/html/; \
-        fi; \
-    fi \
-    && rm -rf /tmp/invoiceninja-extract
+# Copiar arquivos do projeto (código fonte)
+COPY composer.json composer.lock* ./
+COPY package.json ./
+
+# Instalar dependências do Composer
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-scripts
+
+# Instalar dependências do NPM
+RUN npm install
+
+# Copiar o resto dos arquivos do projeto
+COPY . .
+
+# Build do frontend React (se você tem acesso ao repositório UI)
+# Opção 1: Se você tem o código do UI localmente, descomente e ajuste:
+# COPY ui/ /tmp/ui/
+# RUN cd /tmp/ui && npm install && npm run build && cp -r dist/* /var/www/html/public/ && rm -rf /tmp/ui
+
+# Opção 2: Clonar do GitHub (requer GITHUB_TOKEN como build arg)
+# ARG GITHUB_TOKEN
+# RUN if [ -n "$GITHUB_TOKEN" ]; then \
+#     git clone https://${GITHUB_TOKEN}@github.com/invoiceninja/ui.git /tmp/ui && \
+#     cd /tmp/ui && \
+#     npm install && \
+#     npm run build && \
+#     cp -r dist/* /var/www/html/public/ && \
+#     rm -rf /tmp/ui; \
+#     fi
+
+# Opção 3: Se você já compilou localmente e quer usar os arquivos compilados
+# (mas NÃO faça commit deles no Git - use .dockerignore ou copie durante build)
+# Os arquivos em public/ já devem estar compilados se você rodou npm run build localmente
+
+# Build dos assets JS/CSS do Laravel
+RUN npm run production
+
+# Executar scripts pós-instalação do Composer
+RUN composer dump-autoload --optimize \
+    && php artisan vendor:publish --tag=laravel-assets --force || true
+
+# Remover Node.js após build (para reduzir tamanho da imagem)
+RUN apt-get remove -y nodejs \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Configurar permissões
 RUN chown -R www-data:www-data /var/www/html \
