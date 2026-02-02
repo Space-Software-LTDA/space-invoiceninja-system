@@ -52,22 +52,39 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # Baixar e extrair o release oficial do InvoiceNinja
-RUN wget -q https://github.com/invoiceninja/invoiceninja/releases/download/${INVOICENINJA_VERSION}/invoiceninja.tar.gz -O /tmp/invoiceninja.tar.gz \
+# Se INVOICENINJA_VERSION=latest, descobrir a versão mais recente primeiro
+RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
+        LATEST_VERSION=$(curl -s https://api.github.com/repos/invoiceninja/invoiceninja/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || LATEST_VERSION="latest"; \
+        DOWNLOAD_URL="https://github.com/invoiceninja/invoiceninja/releases/download/${LATEST_VERSION}/invoiceninja.tar.gz"; \
+    else \
+        DOWNLOAD_URL="https://github.com/invoiceninja/invoiceninja/releases/download/${INVOICENINJA_VERSION}/invoiceninja.tar.gz"; \
+    fi \
+    && echo "Baixando InvoiceNinja de: $DOWNLOAD_URL" \
+    && curl -L --fail --retry 3 --max-time 300 -o /tmp/invoiceninja.tar.gz "$DOWNLOAD_URL" \
+    && if [ ! -f /tmp/invoiceninja.tar.gz ] || [ ! -s /tmp/invoiceninja.tar.gz ]; then \
+        echo "ERRO: Arquivo baixado está vazio ou não existe"; \
+        exit 1; \
+    fi \
+    && echo "Extraindo arquivo..." \
     && mkdir -p /tmp/invoiceninja-extract \
     && tar -xzf /tmp/invoiceninja.tar.gz -C /tmp/invoiceninja-extract \
     && rm /tmp/invoiceninja.tar.gz \
     && cd /tmp/invoiceninja-extract \
     && if [ -d invoiceninja ]; then \
-        cp -R invoiceninja/* /var/www/html/; \
+        echo "Copiando arquivos da pasta invoiceninja..." \
+        && cp -R invoiceninja/* /var/www/html/; \
     else \
         EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "invoiceninja*" | head -1); \
         if [ -n "$EXTRACT_DIR" ]; then \
-            cp -R "$EXTRACT_DIR"/* /var/www/html/; \
+            echo "Copiando arquivos de $EXTRACT_DIR..." \
+            && cp -R "$EXTRACT_DIR"/* /var/www/html/; \
         else \
-            cp -R . /var/www/html/; \
+            echo "Copiando todos os arquivos..." \
+            && cp -R . /var/www/html/; \
         fi; \
     fi \
-    && rm -rf /tmp/invoiceninja-extract
+    && rm -rf /tmp/invoiceninja-extract \
+    && echo "Download e extração concluídos com sucesso!"
 
 # Configurar permissões
 RUN chown -R www-data:www-data /var/www/html \
