@@ -1,0 +1,60 @@
+# Docker Compose para testar os containers
+# Execute: docker-compose -f docker-compose.test.yml up
+
+version: '3.8'
+
+services:
+  # Teste com Dockerfile.local
+  invoiceninja-local:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: invoiceninja-test-local
+    ports:
+      - "9001:9000"
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    networks:
+      - test-network
+
+  # Teste com Dockerfile.from-source
+  invoiceninja-source:
+    build:
+      context: .
+      dockerfile: Dockerfile.from-source
+    container_name: invoiceninja-test-source
+    ports:
+      - "9002:9000"
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    networks:
+      - test-network
+
+  # Teste com Dockerfile.test-hybrid (RECOMENDADO)
+  invoiceninja-hybrid:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-hybrid
+    container_name: invoiceninja-test-hybrid
+    ports:
+      - "9003:9000"
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./bootstrap/cache:/var/www/html/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
