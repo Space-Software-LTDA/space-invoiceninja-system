@@ -146,7 +146,29 @@ class TranslationsExport extends Command
                 $translations[$key] = html_entity_decode($value);
             }
 
-            Storage::disk('local')->put("lang/{$lang}/{$lang}.json", json_encode(Arr::dot($translations), JSON_UNESCAPED_UNICODE));
+            $jsonContent = json_encode(Arr::dot($translations), JSON_UNESCAPED_UNICODE);
+            
+            // Salvar em storage/app/lang/
+            Storage::disk('local')->put("lang/{$lang}/{$lang}.json", $jsonContent);
+            
+            // Copiar para public/ com hash para uso do React frontend
+            // O hash é os primeiros 8 caracteres do MD5 do conteúdo (como no release oficial)
+            $hash = substr(md5($jsonContent), 0, 8);
+            $publicFileName = "{$lang}-{$hash}.json";
+            $publicPath = public_path($publicFileName);
+            
+            // Remover arquivos antigos com o mesmo padrão de idioma
+            $oldFiles = glob(public_path("{$lang}-*.json"));
+            foreach ($oldFiles as $oldFile) {
+                if (is_file($oldFile)) {
+                    unlink($oldFile);
+                    $this->info("Removido arquivo antigo: " . basename($oldFile));
+                }
+            }
+            
+            // Copiar novo arquivo para public/
+            file_put_contents($publicPath, $jsonContent);
+            $this->info("Arquivo copiado para public/: {$publicFileName}");
         }
     }
 

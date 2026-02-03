@@ -113,11 +113,6 @@ RUN echo "=== Verificando React no release ===" && \
 # etc.
 
 # Copiar arquivos do projeto
-# IMPORTANTE: Não copiar public/ do código-fonte para preservar o do release
-COPY composer.json composer.lock* ./
-COPY package.json ./
-
-# Copiar arquivos do projeto
 # O .dockerignore já filtra public/ e resources/views/react/, então eles serão preservados do release
 COPY composer.json composer.lock* ./
 COPY package.json ./
@@ -126,80 +121,80 @@ COPY . .
 # O .dockerignore garante que public/ e resources/views/react/ não sejam copiados
 # Então eles permanecem intactos do release oficial
 
-# Verificar React após COPY (deve estar preservado pelo .dockerignore)
-RUN echo "=== Verificando React após COPY ===" && \
-    if [ -d /var/www/html/public/react ]; then \
-        echo "✅ public/react/ preservado"; \
-        find /var/www/html/public/react -type f | wc -l | xargs echo "Arquivos:"; \
-        du -sh /var/www/html/public/react; \
-        echo "Estrutura de public/react/:"; \
-        ls -la /var/www/html/public/react/ | head -10; \
-    else \
-        echo "❌ ERRO: public/react/ não encontrado após COPY!"; \
-    fi
-
-# Gerar head.blade.php automaticamente baseado nos arquivos React encontrados
-RUN echo "=== Gerando head.blade.php ===" && \
-    if [ -d /var/www/html/public/react ]; then \
-        echo "Procurando arquivos React..."; \
-        REACT_BASE="/var/www/html/public/react"; \
-        VERSION_DIR=$(find "$REACT_BASE" -maxdepth 1 -type d -name "v*" 2>/dev/null | head -1); \
-        if [ -n "$VERSION_DIR" ]; then \
-            REACT_DIR="$VERSION_DIR"; \
-            VERSION_PATH=$(basename "$VERSION_DIR"); \
-            echo "Encontrado diretório versionado: $VERSION_PATH"; \
+# Preparar React e gerar head.blade.php
+# O React do release pode estar em public/react/v{versão}/ ou precisar ser organizado
+RUN echo "=== Preparando React e gerando head.blade.php ===" && \
+    APP_VERSION=$(cat /var/www/html/VERSION.txt 2>/dev/null | tr -d '\n\r' || echo "5.12.50") && \
+    echo "Versão da aplicação: $APP_VERSION" && \
+    REACT_BASE="/var/www/html/public/react" && \
+    REACT_VERSION_DIR="$REACT_BASE/v$APP_VERSION" && \
+    HEAD_FILE="/var/www/html/resources/views/react/head.blade.php" && \
+    echo "=== Passo 1: Verificando onde estão os arquivos React ===" && \
+    if [ -d "$REACT_VERSION_DIR" ]; then \
+        REACT_COUNT=$(find "$REACT_VERSION_DIR" -type f 2>/dev/null | wc -l); \
+        echo "✅ React encontrado em: $REACT_VERSION_DIR ($REACT_COUNT arquivos)"; \
+        find "$REACT_VERSION_DIR" -maxdepth 1 -type f -name "*.js" | head -3 | while read f; do echo "  - $(basename "$f")"; done; \
+    elif [ -d "$REACT_BASE" ]; then \
+        REACT_FILES=$(find "$REACT_BASE" -type f 2>/dev/null | wc -l); \
+        echo "⚠️  React encontrado em $REACT_BASE mas não em $REACT_VERSION_DIR ($REACT_FILES arquivos)"; \
+        if [ "$REACT_FILES" -gt 10 ]; then \
+            echo "Organizando React em public/react/v$APP_VERSION/..."; \
+            mkdir -p "$REACT_VERSION_DIR" && \
+            find "$REACT_BASE" -maxdepth 1 -type f \( -name "*.js" -o -name "*.css" -o -name "*.png" -o -name "*.svg" \) -exec mv {} "$REACT_VERSION_DIR/" \; 2>/dev/null || true && \
+            echo "React reorganizado"; \
         else \
-            REACT_DIR="$REACT_BASE"; \
-            VERSION_PATH=""; \
-            echo "Usando diretório base: $REACT_DIR"; \
-        fi && \
-        JS_FILES=$(find "$REACT_DIR" -type f -name "*.js" 2>/dev/null | wc -l); \
-        CSS_FILES=$(find "$REACT_DIR" -type f -name "*.css" 2>/dev/null | wc -l); \
-        echo "Encontrados: $JS_FILES arquivos JS, $CSS_FILES arquivos CSS" && \
-        if [ "$JS_FILES" -eq 0 ]; then \
-            echo "⚠️  Nenhum arquivo JS encontrado em $REACT_DIR"; \
-            echo "Listando estrutura:"; \
-            find "$REACT_BASE" -type f | head -20; \
-        else \
-            INCLUDES="" && \
-            for file in $(find "$REACT_DIR" -type f -name "*.js" 2>/dev/null | sort); do \
-                filename=$(basename "$file"); \
-                if [ -n "$VERSION_PATH" ]; then \
-                    path="/react/$VERSION_PATH/$filename"; \
-                else \
-                    path="/react/$filename"; \
-                fi && \
-                if echo "$filename" | grep -q "index-"; then \
-                    INCLUDES="${INCLUDES}<script type=\"module\" crossorigin src=\"${path}\"></script>\n"; \
-                else \
-                    INCLUDES="${INCLUDES}<link rel=\"modulepreload\" href=\"${path}\">\n"; \
-                fi; \
-            done && \
-            for file in $(find "$REACT_DIR" -type f -name "*.css" 2>/dev/null | sort); do \
-                filename=$(basename "$file"); \
-                if [ -n "$VERSION_PATH" ]; then \
-                    path="/react/$VERSION_PATH/$filename"; \
-                else \
-                    path="/react/$filename"; \
-                fi && \
-                INCLUDES="${INCLUDES}<link rel=\"stylesheet\" href=\"${path}\">\n"; \
-            done && \
-            mkdir -p /var/www/html/resources/views/react && \
-            echo -e "$INCLUDES" > /var/www/html/resources/views/react/head.blade.php && \
-            chown www-data:www-data /var/www/html/resources/views/react/head.blade.php && \
-            chmod 644 /var/www/html/resources/views/react/head.blade.php && \
-            FILE_SIZE=$(wc -c < /var/www/html/resources/views/react/head.blade.php); \
-            if [ "$FILE_SIZE" -gt 0 ]; then \
-                echo "✅ head.blade.php gerado com sucesso! ($FILE_SIZE bytes)"; \
-                echo "Primeiras 5 linhas:"; \
-                head -5 /var/www/html/resources/views/react/head.blade.php; \
-            else \
-                echo "❌ ERRO: head.blade.php está vazio!"; \
-            fi; \
+            echo "⚠️  React parece incompleto ($REACT_FILES arquivos)"; \
         fi; \
     else \
-        echo "❌ ERRO: public/react/ não encontrado!"; \
-    fi
+        echo "⚠️  React não encontrado em public/react/, verificando public/ diretamente..."; \
+        PUBLIC_REACT=$(find /var/www/html/public -maxdepth 1 -type f -name "index-*.js" 2>/dev/null | head -1); \
+        if [ -n "$PUBLIC_REACT" ]; then \
+            echo "✅ Arquivos React encontrados diretamente em public/, movendo para public/react/v$APP_VERSION/..."; \
+            mkdir -p "$REACT_VERSION_DIR" && \
+            find /var/www/html/public -maxdepth 1 -type f \( -name "index-*.js" -o -name "*.css" -o -name "*.js" \) -exec mv {} "$REACT_VERSION_DIR/" \; 2>/dev/null || true && \
+            echo "React movido para $REACT_VERSION_DIR"; \
+        else \
+            echo "❌ ERRO: Nenhum arquivo React encontrado!"; \
+            echo "Listando public/:"; \
+            ls -la /var/www/html/public/ | head -10; \
+        fi; \
+    fi && \
+    echo "=== Passo 2: Verificando estrutura final ===" && \
+    if [ -d "$REACT_VERSION_DIR" ]; then \
+        FINAL_COUNT=$(find "$REACT_VERSION_DIR" -type f 2>/dev/null | wc -l); \
+        echo "✅ Estrutura final: $REACT_VERSION_DIR ($FINAL_COUNT arquivos)"; \
+        echo "Arquivos encontrados:"; \
+        find "$REACT_VERSION_DIR" -maxdepth 1 -type f | head -5 | while read f; do echo "  - $(basename "$f")"; done; \
+    else \
+        echo "❌ ERRO: $REACT_VERSION_DIR não existe após organização!"; \
+        exit 1; \
+    fi && \
+    echo "=== Passo 3: Gerando head.blade.php ===" && \
+    mkdir -p /var/www/html/resources/views/react && \
+    cd /var/www/html && \
+    echo "Executando: php artisan ninja:react --type=local" && \
+    php artisan ninja:react --type=local 2>&1 && \
+    if [ -f "$HEAD_FILE" ]; then \
+        FILE_SIZE=$(wc -c < "$HEAD_FILE"); \
+        if [ "$FILE_SIZE" -gt 0 ]; then \
+            echo "✅ head.blade.php gerado com sucesso! ($FILE_SIZE bytes)"; \
+            echo "Primeiras 5 linhas:"; \
+            head -5 "$HEAD_FILE"; \
+        else \
+            echo "❌ ERRO: head.blade.php está vazio após geração!"; \
+            echo "Verificando se ReactBuilder encontrou os arquivos..."; \
+            ls -la "$REACT_VERSION_DIR" | head -10; \
+            exit 1; \
+        fi; \
+    else \
+        echo "❌ ERRO: head.blade.php não foi gerado!"; \
+        exit 1; \
+    fi && \
+    echo "=== Passo 4: Gerando arquivos JSON de tradução para public/ ===" && \
+    cd /var/www/html && \
+    echo "Executando: php artisan ninja:translations --type=export" && \
+    php artisan ninja:translations --type=export 2>&1 && \
+    echo "✅ Arquivos JSON de tradução gerados em storage/app/lang/ e copiados para public/"
 
 # ============================================
 # ETAPA 4: Configurações finais
