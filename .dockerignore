@@ -13,9 +13,12 @@ node_modules
 vendor
 
 # Arquivos compilados (não devem estar no Git, mas por segurança)
+# Para Dockerfile.test-hybrid: ignorar public/ e resources/views/react/ para preservar do release
+public/
 public/react
 public/build
 public/build-admin
+resources/views/react/
 *.js.map
 *.css.map
 
