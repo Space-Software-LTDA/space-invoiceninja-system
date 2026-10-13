@@ -1,18 +1,23 @@
-# Dockerfile para InvoiceNinja com PHP-FPM
-# Otimizado para uso com NGINX separado (EasyPanel)
+# Dockerfile para InvoiceNinja (EasyPanel)
+# Container único: NGINX + PHP-FPM + worker de fila + agendador, via supervisord
 # Usa o release oficial do GitHub com frontend React já compilado
+#
+# Para atualizar o InvoiceNinja: mude INVOICENINJA_VERSION abaixo e faça deploy.
+# Não use "latest": a versão precisa ser reproduzível para dar rollback.
 
-FROM php:8.2-fpm
+FROM php:8.3-fpm
 
 # Variáveis de ambiente
 ENV DEBIAN_FRONTEND=noninteractive \
     PHP_MEMORY_LIMIT=512M \
     PHP_UPLOAD_MAX_FILESIZE=50M \
     PHP_POST_MAX_SIZE=50M \
-    INVOICENINJA_VERSION=latest
+    INVOICENINJA_VERSION=v5.13.47
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
+    nginx \
+    supervisor \
     git \
     curl \
     wget \
@@ -86,6 +91,11 @@ RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
     && rm -rf /tmp/invoiceninja-extract \
     && echo "Download e extração concluídos com sucesso!"
 
+# Guardar uma cópia do public/ do release: no EasyPanel /var/www/html/public é um
+# volume persistente, que esconderia os assets novos. O entrypoint sincroniza a
+# cópia para o volume a cada start.
+RUN cp -a /var/www/html/public /opt/invoiceninja-public
+
 # Configurar permissões
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
@@ -113,12 +123,18 @@ RUN echo "opcache.enable=1" > /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.revalidate_freq=2" >> /usr/local/etc/php/conf.d/opcache.ini \
     && echo "opcache.fast_shutdown=1" >> /usr/local/etc/php/conf.d/opcache.ini
 
+# NGINX (serve o public/ e repassa PHP para o FPM local) e supervisord
+RUN rm -f /etc/nginx/sites-enabled/default
+COPY docker/nginx.conf /etc/nginx/conf.d/invoiceninja.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/invoiceninja.conf
+
 # Script de inicialização
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expor porta do PHP-FPM
-EXPOSE 9000
+# Porta HTTP (NGINX)
+EXPOSE 80
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["php-fpm"]
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
