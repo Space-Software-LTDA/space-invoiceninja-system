@@ -91,10 +91,12 @@ RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
     && rm -rf /tmp/invoiceninja-extract \
     && echo "Download e extração concluídos com sucesso!"
 
-# Personalização: tipo de pagamento PIX (registro id=200 na tabela payment_types).
-# O nome do tipo é traduzido pela chave texts.payment_type_PIX, que não existe no release.
-RUN sed -i "/'payment_type_Zelle'/a\    'payment_type_PIX' => 'PIX'," /var/www/html/lang/*/texts.php \
-    && grep -q "payment_type_PIX" /var/www/html/lang/pt_BR/texts.php
+# Personalização: tipo de pagamento PIX (id=200). Desde a 5.13 a lista de tipos é
+# fixa no código (PaymentType::getDefaultPaymentTypes), então o script adiciona o PIX
+# ali, no mapa de nomes e nas traduções. Se uma versão nova mudar esse arquivo, o
+# build falha aqui de propósito: ajuste docker/pix-patch.sh.
+COPY docker/pix-patch.sh /tmp/pix-patch.sh
+RUN sed -i 's/\r$//' /tmp/pix-patch.sh && sh /tmp/pix-patch.sh /var/www/html && rm /tmp/pix-patch.sh
 
 # Guardar uma cópia do public/ do release: no EasyPanel /var/www/html/public é um
 # volume persistente, que esconderia os assets novos. O entrypoint sincroniza a
