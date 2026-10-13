@@ -91,6 +91,11 @@ RUN if [ "$INVOICENINJA_VERSION" = "latest" ]; then \
     && rm -rf /tmp/invoiceninja-extract \
     && echo "Download e extração concluídos com sucesso!"
 
+# Personalização: tipo de pagamento PIX (registro id=200 na tabela payment_types).
+# O nome do tipo é traduzido pela chave texts.payment_type_PIX, que não existe no release.
+RUN sed -i "/'payment_type_Zelle'/a\    'payment_type_PIX' => 'PIX'," /var/www/html/lang/*/texts.php \
+    && grep -q "payment_type_PIX" /var/www/html/lang/pt_BR/texts.php
+
 # Guardar uma cópia do public/ do release: no EasyPanel /var/www/html/public é um
 # volume persistente, que esconderia os assets novos. O entrypoint sincroniza a
 # cópia para o volume a cada start.
