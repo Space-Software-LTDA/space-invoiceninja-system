@@ -10,3 +10,10 @@ grep -q "payment_type_PIX" "$R/lang/pt_BR/texts.php"
 grep -q "200 => 'payment_type_PIX'" "$F"
 grep -q "'id' => 200, 'name' => 'PIX'" "$F"
 php -l "$F" >/dev/null
+
+# Interface React: a tela de Pagamentos usa um mapa fixo compilado no bundle
+# (src/common/constants/payment-type.ts), não a lista do servidor.
+for js in "$R"/public/payment-type-*.js; do
+    sed -i 's/\(\[[A-Za-z_$][A-Za-z0-9_$]*\.MOBILE_PAYMENT\]:`payment_type_Mobile Payment`\)}/\1,200:`PIX`}/' "$js"
+done
+grep -q ',200:`PIX`}' "$R"/public/payment-type-*.js
